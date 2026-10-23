@@ -1,3 +1,4 @@
+
 import express from "express";
 import net from "node:net";
 
@@ -5,95 +6,152 @@ const TCP_PORT = 5001;
 const HTTP_PORT = 3000;
 
 const app = express();
-app.use(express.json());
 
-// Armazenamento temporário, apenas em memória.
-const messages: {
-    message: string;
+type GpsPacket = {
     receivedAt: string;
     remoteAddress: string;
-}[] = [];
+    protocol: number;
+    length: number;
+    hex: string;
+};
 
-const MAX_MESSAGES = 100;
+const packets: GpsPacket[] = [];
+const MAX_PACKETS = 100;
+
+function parsePackets(buffer: Buffer): {
+    packets: Buffer[];
+    remaining: Buffer;
+} {
+    const packets: Buffer[] = [];
+    let offset = 0;
+
+    while (offset + 5 <= buffer.length) {
+        // GT06: cabeçalho 7878 ou 7979.
+        const shortHeader =
+            buffer[offset] === 0x78 && buffer[offset + 1] === 0x78;
+        const longHeader =
+            buffer[offset] === 0x79 && buffer[offset + 1] === 0x79;
+
+        if (!shortHeader && !longHeader) {
+            offset++;
+            continue;
+        }
+
+        const headerLength = shortHeader ? 2 : 2;
+        const lengthBytes = shortHeader ? 1 : 2;
+
+        if (buffer.length < offset + headerLength + lengthBytes) {
+            break;
+        }
+
+        const packetLength = shortHeader
+            ? buffer[offset + 2]
+            : buffer.readUInt16BE(offset + 2);
+
+        // Tamanho declarado inclui protocolo, dados, serial e CRC.
+        const totalLength = headerLength + lengthBytes + packetLength + 2;
+
+        if (totalLength > 4096 || packetLength < 5) {
+            offset++;
+            continue;
+        }
+
+        if (buffer.length < offset + totalLength) {
+            break;
+        }
+
+        packets.push(buffer.subarray(offset, offset + totalLength));
+        offset += totalLength;
+    }
+
+    return {
+        packets,
+        remaining: buffer.subarray(offset),
+    };
+}
+
+function getProtocol(packet: Buffer): number {
+    const longHeader = packet[0] === 0x79 && packet[1] === 0x79;
+    const protocolOffset = longHeader ? 4 : 3;
+
+    return packet[protocolOffset];
+}
 
 const tcpServer = net.createServer((socket) => {
-    const remoteAddress = `${socket.remoteAddress}:${socket.remotePort}`;
+    const remoteAddress =
+        `${socket.remoteAddress}:${socket.remotePort}`;
 
-    console.log(`[GPS] Conectado: ${remoteAddress}`);
+    console.log(`[TCP] Conexão: ${remoteAddress}`);
 
-    let buffer = "";
+    let buffer = Buffer.alloc(0);
 
-    socket.setEncoding("utf8");
+    socket.on("data", (chunk: Buffer) => {
+        buffer = Buffer.concat([buffer, chunk]);
 
-    socket.on("data", (chunk: string) => {
-        buffer += chunk;
-
-        if (buffer.length > 8192) {
-            console.error("[GPS] Buffer demasiado grande");
+        if (buffer.length > 16384) {
+            console.error("[TCP] Buffer demasiado grande");
             socket.destroy();
             return;
         }
 
-        let separator: number;
+        const result = parsePackets(buffer);
+        buffer = result.remaining;
 
-        while ((separator = buffer.indexOf(";")) !== -1) {
-            const message = buffer.slice(0, separator + 1).trim();
-            buffer = buffer.slice(separator + 1);
-
-            if (!message) continue;
-
-            const entry = {
-                message,
+        for (const packet of result.packets) {
+            const entry: GpsPacket = {
                 receivedAt: new Date().toISOString(),
                 remoteAddress,
+                protocol: getProtocol(packet),
+                length: packet.length,
+                hex: packet.toString("hex").toUpperCase(),
             };
 
-            messages.push(entry);
+            packets.push(entry);
 
-            if (messages.length > MAX_MESSAGES) {
-                messages.shift();
+            if (packets.length > MAX_PACKETS) {
+                packets.shift();
             }
 
-            console.log("\n========== GPS RECEBIDO ==========");
-            console.log("Origem:", remoteAddress);
-            console.log("Mensagem:", message);
-            console.log("Data:", entry.receivedAt);
-            console.log("==================================\n");
+            console.log("\n========== GT06 RECEBIDO ==========");
+            console.log("Origem:", entry.remoteAddress);
+            console.log("Protocolo:", `0x${entry.protocol.toString(16).padStart(2, "0")}`);
+            console.log("Tamanho:", entry.length);
+            console.log("HEX:", entry.hex);
+            console.log("===================================\n");
         }
     });
 
     socket.on("error", (error) => {
-        console.error("[GPS] Erro:", error.message);
+        console.error(`[TCP] ${remoteAddress}: ${error.message}`);
     });
 
     socket.on("close", () => {
-        console.log(`[GPS] Desconectado: ${remoteAddress}`);
+        console.log(`[TCP] Desconectado: ${remoteAddress}`);
     });
 });
 
-// API HTTP
 app.get("/", (_req, res) => {
     res.json({
-        name: "GPS303 Server",
+        name: "GT06 GPS Server",
         status: "online",
         tcpPort: TCP_PORT,
         httpPort: HTTP_PORT,
     });
 });
 
-app.get("/gps/messages", (_req, res) => {
+app.get("/gps/packets", (_req, res) => {
     res.json({
-        total: messages.length,
-        data: messages,
+        total: packets.length,
+        data: packets,
     });
 });
 
 app.get("/gps/latest", (_req, res) => {
-    const latest = messages.at(-1);
+    const latest = packets.at(-1);
 
     if (!latest) {
         res.status(404).json({
-            message: "Ainda não foram recebidas mensagens GPS",
+            message: "Ainda não foram recebidos pacotes GT06",
         });
         return;
     }
@@ -101,11 +159,14 @@ app.get("/gps/latest", (_req, res) => {
     res.json(latest);
 });
 
-// Iniciar os dois servidores
+tcpServer.on("error", (error) => {
+    console.error("[TCP] Erro no servidor:", error);
+});
+
 tcpServer.listen(TCP_PORT, "0.0.0.0", () => {
-    console.log(`[TCP] À espera de GPS na porta ${TCP_PORT}`);
+    console.log(`[TCP] GT06 ativo na porta ${TCP_PORT}`);
 });
 
 app.listen(HTTP_PORT, "0.0.0.0", () => {
-    console.log(`[HTTP] API disponível na porta ${HTTP_PORT}`);
+    console.log(`[HTTP] API ativa na porta ${HTTP_PORT}`);
 });
