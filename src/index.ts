@@ -25,8 +25,11 @@ const tcpServer = net.createServer((socket) => {
 
     socket.setEncoding("utf8");
 
-    socket.on("data", (chunk: string) => {
+    socket.on("data", (chunk: Buffer) => {
+        console.log("[GPS RAW]", chunk.toString("utf8"));
+
         buffer += chunk;
+
 
         if (buffer.length > 8192) {
             console.error("[GPS] Buffer demasiado grande");
