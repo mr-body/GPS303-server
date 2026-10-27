@@ -16,6 +16,82 @@ const messages: {
 
 const MAX_MESSAGES = 100;
 
+type GPSLocation = {
+    imei: string;
+    latitude: number;
+    longitude: number;
+    speed: number;
+    timestamp: string;
+    receivedAt: string;
+    valid: boolean;
+};
+
+const locations = new Map<string, GPSLocation>();
+
+function convertCoordinate(
+    value: string,
+    hemisphere: string,
+): number | null {
+    const raw = Number(value);
+
+    if (!Number.isFinite(raw) || raw <= 0) {
+        return null;
+    }
+
+    const degrees = Math.floor(raw / 100);
+    const minutes = raw - degrees * 100;
+
+    if (minutes >= 60) {
+        return null;
+    }
+
+    let result = degrees + minutes / 60;
+
+    if (hemisphere === "S" || hemisphere === "W") {
+        result = -result;
+    } else if (hemisphere !== "N" && hemisphere !== "E") {
+        return null;
+    }
+
+    return result;
+}
+
+function parseGPSLocation(message: string): GPSLocation | null {
+    const fields = message.replace(/;$/, "").split(",");
+
+    if (fields[1] !== "tracker" || fields[4] !== "F") {
+        return null;
+    }
+
+    const imei = fields[0].replace("imei:", "");
+
+    if (!/^\d{15}$/.test(imei)) {
+        return null;
+    }
+
+    const latitude = convertCoordinate(fields[7], fields[8]);
+    const longitude = convertCoordinate(fields[9], fields[10]);
+
+    if (latitude === null || longitude === null) {
+        return null;
+    }
+
+    const valid = fields[6] === "A";
+
+    // O campo da hora do pacote contém a data e a hora do rastreador.
+    const rawTimestamp = fields[2];
+
+    return {
+        imei,
+        latitude,
+        longitude,
+        speed: Number(fields[11]) || 0,
+        timestamp: rawTimestamp,
+        receivedAt: new Date().toISOString(),
+        valid,
+    };
+}
+
 const tcpServer = net.createServer((socket) => {
     const remoteAddress = `${socket.remoteAddress}:${socket.remotePort}`;
 
@@ -41,6 +117,19 @@ const tcpServer = net.createServer((socket) => {
 
         while ((separator = buffer.indexOf(";")) !== -1) {
             const message = buffer.slice(0, separator + 1).trim();
+            const location = parseGPSLocation(message);
+
+            if (location) {
+                locations.set(location.imei, location);
+
+                console.log("[GPS] Localização:", {
+                    imei: location.imei,
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    valid: location.valid,
+                });
+            }
+
             buffer = buffer.slice(separator + 1);
 
             if (!message) continue;
@@ -111,6 +200,23 @@ app.get("/gps/latest", (_req, res) => {
     }
 
     res.json(latest);
+});
+
+app.get("/gps/location/:imei", (req, res) => {
+    const location = locations.get(req.params.imei);
+
+    if (!location) {
+        res.status(404).json({
+            message: "Ainda não existe localização para este IMEI",
+        });
+        return;
+    }
+
+    res.json({
+        ...location,
+        googleMapsUrl:
+            `https://www.google.com/maps?q=${location.latitude},${location.longitude}`,
+    });
 });
 
 // Iniciar os dois servidores
