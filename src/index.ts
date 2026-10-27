@@ -57,6 +57,15 @@ const tcpServer = net.createServer((socket) => {
                 messages.shift();
             }
 
+            if (message.startsWith("##,imei:")) {
+                console.log("[GPS] Login recebido:", message);
+
+                socket.write("LOAD\r\n");
+
+                console.log("[GPS] Resposta enviada: LOAD");
+                continue;
+            }
+
             console.log("\n========== GPS RECEBIDO ==========");
             console.log("Origem:", remoteAddress);
             console.log("Mensagem:", message);
