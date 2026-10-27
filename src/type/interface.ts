@@ -17,11 +17,11 @@ export type MessageDocument = {
 
 export type LocationDocument = {
     imei: string;
-    latitude: number;
-    longitude: number;
-    speed: number;
+    latitude: number | null;
+    longitude: number | null;
+    speed: number | null;
     batteryLevel: number | null;
-    timestamp: string;
-    receivedAt: string;
-    valid: boolean;
+    timestamp: string | null;
+    receivedAt: string | null;
+    valid: boolean | null;
 };

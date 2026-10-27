@@ -1,6 +1,7 @@
 import { HTTPServer } from "./src/httpServer";
 import { LocalField } from "./src/lib/LocalField";
-import { Conn } from "./src/service/conn";
+import { GPSController } from "./src/routes/gps.controller";
+import { GPSMetrics } from "./src/service/GPS_Metrics";
 import { TCPServer } from "./src/tcpServer";
 import type { LocationDocument, MessageDocument } from "./src/type/interface";
 
@@ -33,14 +34,13 @@ async function main(): Promise<void> {
     // 3. Injetar as dependências no servidor TCP.
     const tcpServer = new TCPServer(
         TCP_PORT,
-        (socket) => new Conn(socket, messages, locations),
+        (socket) => new GPSMetrics(socket, messages, locations),
     );
 
     // 4. Injetar as coleções no servidor HTTP.
     const httpServer = new HTTPServer(
         HTTP_PORT,
-        messages,
-        locations,
+        new GPSController(messages, locations),
     );
 
     // 5. Iniciar os servidores.

@@ -1,14 +1,14 @@
 
 import net from "node:net";
 import type { Socket } from "node:net";
-import type { Conn } from "./service/conn";
+import type { GPSMetrics } from "./service/GPS_Metrics";
 
 export class TCPServer {
     private server: net.Server;
 
     constructor(
         private readonly port: number,
-        private readonly createConnection: (socket: Socket) => Conn,
+        private readonly createConnection: (socket: Socket) => GPSMetrics,
         private readonly host = "0.0.0.0",
     ) {
         this.server = net.createServer((socket) => {

@@ -1,25 +1,9 @@
 import type { Socket } from "node:net";
 import type { LocalCollection } from "../lib/LocalField";
 import { GPSTrackerParser } from "./GPS_Engine/GPSTrackerParser";
+import type { LocationDocument, MessageDocument } from "../type/interface";
 
-type MessageDocument = {
-    message: string;
-    receivedAt: string;
-    remoteAddress: string;
-};
-
-type LocationDocument = {
-    imei: string;
-    latitude: number;
-    longitude: number;
-    speed: number;
-    batteryLevel: number | null;
-    timestamp: string | null;
-    receivedAt: string | null;
-    valid: boolean | null;
-};
-
-export class Conn {
+export class GPSMetrics {
     private buffer = "";
     private queue: Promise<void> = Promise.resolve();
     private readonly remoteAddress: string;
@@ -145,6 +129,10 @@ export class Conn {
             imei: document.imei,
             latitude: document.latitude,
             longitude: document.longitude,
+            speed: document.speed,
+            batteryLevel: document.batteryLevel,
+            timestamp: document.timestamp,
+            receivedAt: document.receivedAt,
             valid: document.valid,
         });
     }
