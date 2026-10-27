@@ -343,6 +343,61 @@ Contribuições são bem-vindas. Para propor uma alteração:
 4. Envie os commits para o seu fork.
 5. Abra um Pull Request descrevendo o problema e a solução proposta.
 
+## Exemplo de pacote recebido por um GPS Tracker (GPS303) com formato corregido pelo programador.
+
+```bash
+imei:869706066439730,tracker,261027161251,100%,F,161251.000,A,0853.50561,S,01314.68010,E,0.00,34.40,,0,0,0.00%,,;
+```
+
+codigo que corrige o formato do pacote: 
+```javascript
+const fields = message.replace(/;$/, "").split(",");
+````
+### Significado
+
+| Índice | Valor | Significado |
+|---|---|---|
+| 0 | imei:869706066439730 | IMEI do rastreador |
+| 1 | tracker | Tipo de mensagem: dados do rastreamento |
+| 2 | 261027161251 | Data no formato AAMMDDHHMMSS |
+| 3 | 100% | Indicador de bateria reportado pelo dispositivo |
+| 4 | F | Tipo de pacote de localização |
+| 5 | 161251.000 | Hora GPS: 16:12:51.000 |
+| 6 | A | Estado da posição: válida/ativa |
+| 7 | 0853.50561 | Latitude em graus e minutos |
+| 8 | S | Hemisfério sul |
+| 9 | 01314.68010 | Longitude em graus e minutos |
+| 10 | E | Hemisfério este |
+| 11 | 0.00 | Velocidade reportada, provavelmente em nós |
+| 12 | 34.40 | Campo numérico adicional; pode representar direção/curso, conforme a versão do protocolo |
+| 13 | vazio | Campo não preenchido |
+| 14 | 0 | Campo de estado ou indicador |
+| 15 | 0 | Campo de estado ou indicador |
+| 16 | 0.00% | Campo percentual reportado pelo equipamento |
+| 17 | vazio | Campo não preenchido |
+| 18 | ; | Terminador da mensagem |
+
+Os campos importantes são:
+
+### Localização
+- **F**: Mensagem com dados de posição.
+- **A**: Estado de posição válida, neste formato.
+- **0853.50897,S**: Latitude em graus e minutos, a sul.
+- **01314.68184,E**: Longitude em graus e minutos, a este.
+- **0.00**: Velocidade reportada, provavelmente em nós, conforme o protocolo.
+
+### A posição precisa de ser convertida de graus e minutos para graus decimais antes de a usares num mapa.
+
+### Coordenadas decimais:
+- **Latitude: -8.891816**
+- **Longitude: 13.244697**
+
+A conversão é feita assim:
+
+$$ \text{Graus decimais} = \text{graus} + \frac{\text{minutos}}{60} $$
+
+Como a latitude tem hemisfério S, o resultado é negativo. A longitude com E é positiva.
+
 ## Licença
 
 Este projeto ainda não possui uma licença definida. Se você pretende utilizar, modificar ou distribuir o código, defina uma licença no repositório antes de usá-lo em um projeto comercial ou de terceiros.
