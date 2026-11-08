@@ -3,14 +3,22 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev": "bun --watch index.ts",
+    "start": "bun index.ts",
+    "db:migrate": "bun scripts/migrate.ts",
+    "typecheck": "tsc --noEmit"
+  },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/express": "^5.0.6"
+    "@types/express": "^5.0.6",
+    "@types/pg": "^8.23.1"
   },
   "peerDependencies": {
     "typescript": "^7"
   },
   "dependencies": {
-    "express": "^5.3.0"
+    "express": "^5.3.0",
+    "pg": "^8.23.1"
   }
 }
